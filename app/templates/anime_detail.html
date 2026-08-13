@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{{ anime_title or slug }}</h2>
+    <p style="color: var(--text-secondary);">
+        Выберите серии для скачивания
+    </p>
+</div>
+
+<div id="episodes">
+    {% if seasons_json and seasons_json != "[]" %}
+    <div id="season-list"></div>
+
+    <div style="margin-top: 16px; display: flex; gap: 8px;">
+        <button class="btn btn-primary" onclick="downloadSelected()">Скачать выбранное</button>
+        <button class="btn btn-secondary" onclick="selectAll(true)">Выбрать всё</button>
+        <button class="btn btn-secondary" onclick="selectAll(false)">Снять всё</button>
+    </div>
+    {% else %}
+    <div class="card">
+        <p style="color: var(--text-secondary);">Нажмите "Парсить" на странице каталога, чтобы загрузить список серий.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const seasons = {{ seasons_json|safe }};
+
+function renderSeasons() {
+    const container = document.getElementById("season-list");
+    container.innerHTML = "";
+
+    seasons.forEach(season => {
+        const block = document.createElement("div");
+        block.className = "card";
+        block.style.marginBottom = "12px";
+
+        const header = document.createElement("h3");
+        header.textContent = `${season.season} сезон`;
+        header.style.marginBottom = "8px";
+        block.appendChild(header);
+
+        // Кнопки выбора всех серий в этом сезоне
+        const seasonActions = document.createElement("div");
+        seasonActions.style.cssText = "margin-bottom: 8px; display: flex; gap: 8px;";
+        seasonActions.innerHTML = `
+            <button onclick="selectAllInSeason(${season.season}, true)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:.85rem;padding:0;">✓ Выбрать все</button>
+            <button onclick="selectAllInSeason(${season.season}, false)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:.85rem;padding:0;">✕ Снять все</button>
+        `;
+        block.appendChild(seasonActions);
+
+        const grid = document.createElement("div");
+        grid.style.display = "flex";
+        grid.style.flexWrap = "wrap";
+        grid.style.gap = "8px";
+
+        season.episodes.forEach(ep => {
+            const label = document.createElement("label");
+            label.style.cssText = `
+                display: flex; align-items: center; gap: 6px;
+                padding: 6px 12px; background: var(--bg-primary);
+                border: 1px solid var(--border); border-radius: var(--radius);
+                cursor: pointer; font-size: 0.9rem;
+                transition: border-color 0.2s;
+            `;
+            label.title = ep.title;
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "ep-checkbox";
+            checkbox.dataset.url = ep.url;
+            checkbox.dataset.number = ep.number;
+            checkbox.dataset.season = season.season;
+
+            const text = document.createElement("span");
+            text.textContent = `${ep.number} серия`;
+
+            label.appendChild(checkbox);
+            label.appendChild(text);
+            grid.appendChild(label);
+        });
+
+        block.appendChild(grid);
+        container.appendChild(block);
+    });
+}
+
+function selectAll(select) {
+    document.querySelectorAll(".ep-checkbox").forEach(cb => cb.checked = select);
+}
+
+function selectAllInSeason(season, select) {
+    document.querySelectorAll(`.ep-checkbox[data-season="${season}"]`).forEach(cb => cb.checked = select);
+}
+
+async function downloadSelected() {
+    const selected = document.querySelectorAll(".ep-checkbox:checked");
+    if (selected.length === 0) {
+        alert("Выберите хотя бы одну серию");
+        return;
+    }
+
+    const episodes = [];
+    selected.forEach(cb => {
+        episodes.push({
+            url: cb.dataset.url,
+            season: parseInt(cb.dataset.season),
+            episode_number: parseInt(cb.dataset.number),
+        });
+    });
+
+    for (const ep of episodes) {
+        try {
+            const resp = await fetch("/api/downloads", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    url: ep.url,
+                    season: ep.season,
+                    episode_number: ep.episode_number,
+                    slug: "{{ slug }}",
+                }),
+            });
+            const result = await resp.json();
+            if (!result.ok) {
+                console.warn("Ошибка добавления:", ep.episode_number, result.error);
+            }
+        } catch (err) {
+            console.error("Ошибка:", err);
+        }
+    }
+
+    alert(`${episodes.length} задач добавлено. Перейдите на дашборд для отслеживания.`);
+}
+
+document.addEventListener("DOMContentLoaded", renderSeasons);
+</script>
+{% endblock %}

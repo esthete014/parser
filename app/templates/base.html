@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DOWNLOADER{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=3">
+</head>
+<body>
+    <header class="navbar">
+        <div class="container">
+            <a></a>
+            <nav class="nav-links">
+                <a href="/">Queue</a>
+                <a href="/parse">Parse</a>
+                <a href="/settings">Settings</a>
+                <a href="/login">Sign in</a>
+                <button onclick="shutdownServer()" class="btn-shutdown" title="Выключить сервер">⏻</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>downloader &mdash; парсер видео</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', path='app.js') }}?v=2"></script>
+    <script>
+    async function shutdownServer() {
+        if (!confirm("Выключить сервер?")) return;
+        try {
+            const r = await fetch("/api/shutdown", { method: "POST" });
+            const d = await r.json();
+            if (d.ok) {
+                document.body.innerHTML = `
+                    <div style="display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:16px;">
+                        <h1>Сервер завершает работу</h1>
+                        <p style="color:var(--text-secondary);">Вы можете закрыть это окно</p>
+                    </div>`;
+            }
+        } catch (_) {
+            document.body.innerHTML = `
+                <div style="display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:16px;">
+                    <h1>Сервер остановлен</h1>
+                    <p style="color:var(--text-secondary);">Вы можете закрыть это окно</p>
+                </div>`;
+        }
+    }
+    </script>
+</body>
+</html>

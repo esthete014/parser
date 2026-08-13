@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+        <h2>Загрузки</h2>
+        <p style="color: var(--text-secondary);">Прогресс в реальном времени</p>
+    </div>
+    <button id="btn-clear-queue" class="btn btn-danger" style="padding:6px 16px;">Очистить очередь</button>
+</div>
+
+<div id="cooldown-banner" class="card" style="display:none; border-color: rgba(255,152,0,.45); background: rgba(255,152,0,.08);">
+    <strong style="color: var(--warning);">ограничение загрузки поставщиком</strong>
+    <span style="color: var(--text-secondary);">Пауза очереди: <span id="cooldown-timer" style="color: var(--warning); font-weight:600;">—</span></span>
+</div>
+
+<div id="task-list">
+    <div class="card" style="text-align: center; color: var(--text-secondary);">Загрузка списка задач...</div>
+</div>
+
+<div id="empty-state" style="display: none;">
+    <div class="card" style="text-align: center; color: var(--text-secondary);">
+        <p style="font-size: 1.2rem; margin-bottom: 8px;">Нет активных загрузок</p>
+        <p>Введите URL на странице <a href="/parse" style="color: var(--accent);">парсинга</a></p>
+    </div>
+</div>
+
+{% if tasks_json and tasks_json != "[]" %}
+<script>window.__initialTasks = {{ tasks_json|safe }};</script>
+{% endif %}
+
+<script>
+const taskListEl = document.getElementById("task-list");
+const emptyStateEl = document.getElementById("empty-state");
+
+function formatSpeed(mbps) {
+    if (!mbps || mbps <= 0) return "";
+    return mbps < 1 ? `${(mbps * 1000).toFixed(0)} КБ/с` : `${mbps.toFixed(1)} МБ/с`;
+}
+
+const _etaStart = {};
+
+function formatEta(progress, taskId, isDownloading) {
+    if (!isDownloading || progress <= 0 || progress >= 100) return "";
+    if (!_etaStart[taskId]) _etaStart[taskId] = Date.now();
+    const elapsed = (Date.now() - _etaStart[taskId]) / 1000;
+    if (elapsed <= 0) return "";
+    const remaining = (100 - progress) / progress * elapsed;
+    if (remaining < 10) return "< 10 сек";
+    if (remaining < 60) return "~" + Math.round(remaining) + " сек";
+    if (remaining < 3600) return "~" + Math.round(remaining / 60) + " мин";
+    return "~" + (remaining / 3600).toFixed(1) + " ч";
+}
+
+function renderTasks(tasks) {
+    if (!tasks || tasks.length === 0) {
+        taskListEl.innerHTML = "";
+        emptyStateEl.style.display = "block";
+        return;
+    }
+    emptyStateEl.style.display = "none";
+
+    const ph = taskListEl.querySelector(".card:not(.task-card)");
+    if (ph) ph.remove();
+
+    const existingIds = new Set();
+    const incomingIds = new Set(tasks.map(t => t.id));
+
+    const cards = taskListEl.querySelectorAll(".task-card");
+    cards.forEach(card => {
+        const id = card.dataset.taskId;
+        if (!incomingIds.has(id)) {
+            card.remove();
+        } else {
+            existingIds.add(id);
+        }
+    });
+
+    tasks.forEach(t => {
+        const existing = taskListEl.querySelector(`.task-card[data-task-id="${t.id}"]`);
+        const card = existing || document.createElement("div");
+        if (!existing) {
+            card.className = "card task-card";
+            card.dataset.taskId = t.id;
+            card.style.opacity = "0";
+            taskListEl.appendChild(card);
+            requestAnimationFrame(() => { card.style.opacity = "1"; });
+        }
+
+        const isQueued = t.status === "queued";
+        const isDownloading = t.status === "downloading";
+        const isUploading = t.status === "uploading";
+        const isDone = t.status === "done";
+        const isFailed = t.status === "failed";
+        const isBlocked = t.status === "blocked";
+        const isCancelled = t.status === "cancelled";
+        const isPaused = t.status === "paused";
+
+        const quality = t.actual_quality || t.selected_quality || "?";
+        const epStr = `S${String(t.episode.season).padStart(2, "0")}E${String(t.episode.episode_number).padStart(4, "0")}`;
+        const progress = Math.round(t.progress);
+        const speed = formatSpeed(t.speed);
+        const eta = formatEta(t.progress, t.id, isDownloading);
+
+        let statusBadge = "";
+        let actions = "";
+
+        if (isQueued) {
+            statusBadge = '<span class="badge badge-queued">В очереди</span>';
+            actions = `<button onclick="fetch('/api/downloads/${t.id}/cancel',{method:'POST'})" class="btn btn-danger" style="padding:4px 12px;font-size:.8rem;">Отмена</button>`;
+        } else if (isDownloading) {
+            statusBadge = `<span class="badge badge-downloading">${progress}%</span>`;
+            actions = `
+                <button onclick="fetch('/api/downloads/${t.id}/pause',{method:'POST'})" class="btn btn-secondary" style="padding:4px 12px;font-size:.8rem;">Остановить</button>
+                <button onclick="fetch('/api/downloads/${t.id}/cancel',{method:'POST'})" class="btn btn-danger" style="padding:4px 12px;font-size:.8rem;">Отменить</button>`;
+        } else if (isUploading) {
+            statusBadge = '<span class="badge badge-uploading">Отправка...</span>';
+            actions = '';
+        } else if (isPaused) {
+            statusBadge = '<span class="badge badge-paused">⏸ Пауза</span>';
+            actions = `<button onclick="fetch('/api/downloads/${t.id}/resume',{method:'POST'})" class="btn btn-primary" style="padding:4px 12px;font-size:.8rem;">Продолжить</button>`;
+        } else if (isDone) {
+            statusBadge = '<span class="badge badge-done">Завершено</span>';
+        } else if (isBlocked) {
+            statusBadge = '<span class="badge badge-blocked">Ожидает (порядок)</span>';
+            actions = `<button onclick="fetch('/api/downloads/${t.id}/retry',{method:'POST'})" class="btn btn-primary" style="padding:4px 12px;font-size:.8rem;">Блокировка: Повторить</button>`;
+        } else if (isFailed) {
+            statusBadge = `<span class="badge badge-failed">Ошибка</span>`;
+            actions = `<button onclick="fetch('/api/downloads/${t.id}/retry',{method:'POST'})" class="btn btn-primary" style="padding:4px 12px;font-size:.8rem;">Ошибка: Повторить</button>`;
+        } else if (isCancelled) {
+            statusBadge = '<span class="badge badge-cancelled">⏹ Отменено</span>';
+        }
+
+        const showProgress = isDownloading || isPaused;
+        const progressPct = showProgress ? progress : 0;
+        const errorText = t.error
+            ? `<p style="color:var(--error);font-size:.8rem;margin-top:4px;"> ${t.error}</p>`
+            : "";
+        const downloadedInfo = t.downloaded_to
+            ? `<p style="color:var(--text-secondary);font-size:.8rem;"> ${t.downloaded_to}</p>`
+            : "";
+
+        const taskActivity = _activity.filter(a => a.task === t.id);
+        const errNow = taskActivity.filter(a => a.level === "error").length;
+        const newErr = errNow - (_activityErrSeen.get(t.id) || 0);
+        _activityErrSeen.set(t.id, errNow);
+
+        const prevJournal = existing ? existing.querySelector(".task-journal") : null;
+        const wasOpen = prevJournal ? prevJournal.open : false;
+        const journalOpen = (wasOpen || newErr > 0) ? "open" : "";
+
+        let journalHtml = "";
+        if (taskActivity.length) {
+            const errBadge = errNow
+                ? `<span style="color:var(--error);font-weight:600;">(${errNow})</span>`
+                : `<span style="color:var(--text-secondary);">(${taskActivity.length})</span>`;
+            const rows = taskActivity.map(a => {
+                const ts = a.ts ? new Date(a.ts * 1000).toLocaleTimeString("ru-RU") : "";
+                const color = a.level === "error" ? "var(--error)"
+                    : a.level === "warn" ? "var(--warning)" : "var(--text-secondary)";
+                return `<div style="color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">`
+                    + `<span style="color:var(--text-secondary);font-size:.68rem;">${ts}</span> `
+                    + `${a.text}</div>`;
+            }).join("");
+            journalHtml = `
+            <details class="task-journal" ${journalOpen} style="margin-top:10px;border-top:1px dashed rgba(136,146,176,.2);padding-top:6px;">
+                <summary style="cursor:pointer;font-size:.75rem;color:var(--text-secondary);user-select:none;">
+                     Журнал ${errBadge}
+                </summary>
+                <div style="margin-top:6px;max-height:200px;overflow-y:auto;font-size:.74rem;line-height:1.55;">
+                    ${rows}
+                </div>
+            </details>`;
+        }
+
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <strong>${t.episode.slug || "?"}</strong>
+                        <span style="color:var(--text-secondary);">${epStr}</span>
+                        <span style="color:var(--accent);">${quality}</span>
+                        ${statusBadge}
+                    </div>
+                    ${errorText}
+                    ${downloadedInfo}
+                    ${showProgress ? `<div class="progress-bar" style="margin-top:8px;"><div class="fill" style="width:${progressPct}%;"></div></div>` : ""}
+                    ${isDownloading && (speed || eta) ? `<div style="display:flex;gap:16px;margin-top:4px;font-size:.8rem;color:var(--text-secondary);">${speed ? `<span> ${speed}</span>` : ""}${eta ? `<span> ${eta}</span>` : ""}</div>` : ""}
+                    ${journalHtml}
+                </div>
+                <div style="margin-left:12px;display:flex;gap:4px;">${actions}</div>
+            </div>
+        `;
+    });
+}
+
+let _activity = [];
+const _activityErrSeen = new Map();
+
+
+let _sseTimer = null;
+let _pendingData = null;
+
+function connectSSE() {
+    const es = new EventSource("/api/downloads/stream");
+    es.onmessage = (e) => {
+        try {
+            const d = JSON.parse(e.data);
+            if (d.tasks === undefined) return;
+            _cooldownUntil = d.cooldown_until || 0;
+            _pendingData = d;
+            if (_sseTimer) return;
+            _sseTimer = setTimeout(() => {
+                const data = _pendingData;
+                _sseTimer = null;
+                _pendingData = null;
+                if (data.activity) _activity = data.activity;
+                if (data.tasks) renderTasks(data.tasks);
+            }, 300);
+        } catch(_) {}
+    };
+    es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
+}
+
+
+let _cooldownUntil = {{ cooldown_until|default(0) }};
+const cooldownBanner = document.getElementById("cooldown-banner");
+const cooldownTimer = document.getElementById("cooldown-timer");
+
+function renderCooldown() {
+    if (!_cooldownUntil) { cooldownBanner.style.display = "none"; return; }
+    const remain = _cooldownUntil - Date.now() / 1000;
+    if (remain <= 0) { cooldownBanner.style.display = "none"; _cooldownUntil = 0; return; }
+    cooldownBanner.style.display = "block";
+    const m = Math.floor(remain / 60);
+    const s = Math.floor(remain % 60);
+    cooldownTimer.textContent =
+        m > 0 ? `${m} мин ${String(s).padStart(2, "0")} сек` : `${s} сек`;
+}
+setInterval(renderCooldown, 1000);
+renderCooldown();
+
+document.getElementById("btn-clear-queue").addEventListener("click", async () => {
+    if (!confirm("Удалить все задачи из очереди (незавершённые качки, паузы, ожидания)?")) return;
+    try {
+        const r = await fetch("/api/downloads/clear", { method: "POST" });
+        const d = await r.json();
+        if (d.ok) {
+            if (d.removed) {
+                console.log("Очередь очищена:", d.removed, "задач");
+            }
+        } else {
+            alert("Не удалось очистить очередь");
+        }
+    } catch (e) {
+        alert("Ошибка при очистке очереди: " + e);
+    }
+});
+
+
+if (window.__initialTasks) renderTasks(window.__initialTasks);
+connectSSE();
+</script>
+
+<style>
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.8rem; font-weight:500; }
+.badge-queued { background:rgba(108,99,255,.15); color:var(--accent); }
+.badge-downloading { background:rgba(255,152,0,.15); color:var(--warning); }
+.badge-uploading { background:rgba(33,150,243,.15); color:#2196f3; }
+.badge-done { background:rgba(76,175,80,.15); color:var(--success); }
+.badge-failed { background:rgba(244,67,54,.15); color:var(--error); }
+.badge-blocked { background:rgba(255,152,0,.18); color:var(--warning); }
+.badge-cancelled { background:rgba(136,146,176,.15); color:var(--text-secondary); }
+.badge-paused { background:rgba(255,193,7,.15); color:#ffc107; }
+.progress-bar { background:rgba(136,146,176,.2); border-radius:4px; height:6px; overflow:hidden; }
+.progress-bar .fill { height:100%; background:var(--accent); border-radius:4px; transition:width .5s ease; }
+</style>
+{% endblock %}

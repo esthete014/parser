@@ -1,0 +1,22 @@
+# Данные пользователя
+data/
+
+# HTML-дампы для анализа
+response/
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Окружение
+.env
+venv/
+.venv/

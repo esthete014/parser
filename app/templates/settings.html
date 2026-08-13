@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Настройки</h2>
+    <p style="color: var(--text-secondary);">Конфигурация приложения</p>
+</div>
+
+<form id="settings-form">
+    <div class="card">
+        <h3>Скачивание</h3>
+        <div style="display: grid; gap: 12px; max-width: 500px;">
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Папка загрузок</span>
+                <input type="text" id="download_path" data-section="download" data-key="path"
+                       placeholder="data/downloads/">
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Качество по умолчанию</span>
+                <select id="download_quality" data-section="download" data-key="quality">
+                    <option value="360p">360p</option>
+                    <option value="480p">480p</option>
+                    <option value="720p" selected>720p</option>
+                    <option value="1080p">1080p</option>
+                </select>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Если качества нет</span>
+                <select id="download_quality_fallback" data-section="download" data-key="quality_fallback">
+                    <option value="lower">Хуже (меньший размер)</option>
+                    <option value="higher">Лучше (макс. качество)</option>
+                </select>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Параллельных загрузок</span>
+                <input type="number" id="download_parallel" data-section="download" data-key="parallel"
+                       min="1" max="5" value="1">
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Мин. размер файла (МБ)</span>
+                <input type="number" id="download_min_size_mb" data-section="download" data-key="min_size_mb"
+                       min="0.1" max="100" step="0.1" value="1">
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                    Файл меньше этого размера считается битым (заглушкой CDN) и не отправляется
+                </span>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Повторов упавшей задачи</span>
+                <input type="number" id="download_retry_attempts" data-section="download" data-key="retry_attempts"
+                       min="0" max="20" value="3">
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                    После этого эпизод блокирует очередь до ручного «Повторить»
+                </span>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Задержка между повторами (с)</span>
+                <input type="number" id="download_retry_backoff_s" data-section="download" data-key="retry_backoff_s"
+                       min="1" max="300" value="5">
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Повторов парсинга страницы</span>
+                <input type="number" id="download_parse_attempts" data-section="download" data-key="parse_attempts"
+                       min="1" max="20" value="3">
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                    Защита от разовых обрывов соединения
+                </span>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Заглушек до паузы</span>
+                <input type="number" id="download_stub_trigger" data-section="download" data-key="stub_trigger"
+                       min="1" max="20" value="3">
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                    Сколько скачанных заглушек подряд считаются анти-бот флагом IP
+                </span>
+            </label>
+            <label>
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Длительность паузы (с)</span>
+                <input type="number" id="download_cooldown_s" data-section="download" data-key="cooldown_s"
+                       min="30" max="86400" value="900">
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                    На сколько встаёт очередь при обнаружении флага; после — автоматически продолжится
+                </span>
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Cooldown (защита от блокировки)</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
+            Пауза между запросами к сайту
+        </p>
+        <div style="display: flex; gap: 12px; max-width: 400px;">
+            <label style="flex: 1;">
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">От (мс)</span>
+                <input type="number" id="cooldown_min_ms" data-section="cooldown" data-key="min_ms"
+                       min="500" max="30000" value="2000">
+            </label>
+            <label style="flex: 1;">
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">До (мс)</span>
+                <input type="number" id="cooldown_max_ms" data-section="cooldown" data-key="max_ms"
+                       min="500" max="60000" value="5000">
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Telegram</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
+            Для управления загрузками через Telegram необходимо
+            <a href="https://my.telegram.org/apps" target="_blank" style="color: var(--accent);">
+                получить API ID и API Hash</a>
+        </p>
+
+        <div id="tg-config" style="display: grid; gap: 12px; max-width: 500px;">
+            <div style="display: flex; gap: 8px;">
+                <label style="flex: 1;">
+                    <span style="font-size: 0.9rem; color: var(--text-secondary);">API ID</span>
+                    <input type="number" id="telegram_api_id" data-section="telegram" data-key="api_id">
+                </label>
+                <label style="flex: 2;">
+                    <span style="font-size: 0.9rem; color: var(--text-secondary);">API Hash</span>
+                    <input type="text" id="telegram_api_hash" data-section="telegram" data-key="api_hash">
+                </label>
+            </div>
+
+            <div id="telegram-status" style="font-size: 0.9rem;"></div>
+
+            <div id="tg-controls" style="display: none;">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-primary" onclick="connectTelegram()">Подключить</button>
+                    <button type="button" class="btn btn-danger" onclick="disconnectTelegram()">Отключить</button>
+                    <button type="button" class="btn btn-danger" onclick="logoutTelegram()"
+                            style="background:var(--error);">Выйти</button>
+                    <span id="telegram-connection-status" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                </div>
+
+                <div style="margin-top: 8px;">
+                    <span style="font-size: 0.9rem; color: var(--text-secondary);">Чат для отправки</span>
+                    <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                        <input type="text" id="telegram_target_dialog" placeholder="username или chat_id"
+                               style="flex: 1;" data-nosave>
+                        <button type="button" class="btn btn-secondary" onclick="loadDialogs()"
+                                style="padding: 4px 12px; font-size: .85rem;">Чаты</button>
+                        <button type="button" class="btn btn-secondary" onclick="saveDialog()"
+                                style="padding: 8px 16px;">сохранить</button>
+                    </div>
+                    <div id="dialog-list" style="display: none; margin-top: 8px;">
+                        <select id="dialog-select" style="width: 100%; padding: 8px;"
+                                onchange="document.getElementById('telegram_target_dialog').value=this.value; saveDialog();">
+                            <option value="">Выберите чат</option>
+                        </select>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                            Выберите чат из списка или введите username вручную
+                        </p>
+                    </div>
+                </div>
+
+                <label style="margin-top: 8px;">
+                    <span style="font-size: 0.9rem; color: var(--text-secondary);">Лимит сплита (МБ)</span>
+                    <input type="number" id="telegram_split_mb" data-section="telegram" data-key="split_mb"
+                           min="100" max="2000" value="1900">
+                </label>
+
+                <div class="tg-auto-send" style="margin-top: 12px; padding: 8px; background: var(--bg-primary); border-radius: var(--radius); border: 1px solid var(--border);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="telegram_auto_send_enabled" data-section="telegram" data-key="auto_send_enabled"
+                               onchange="toggleAutoSend(this.checked)">
+                        <span style="font-weight: 500;">Автоотправка скачанного</span>
+                    </label>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 4px 0 0 24px;">
+                        После завершения загрузки отправлять видео в выбранный чат Telegram
+                    </p>
+                    <div id="tg-auto-send-warning" style="display: none; font-size: 0.85rem; color: #ff9800; margin: 4px 0 0 24px;">
+                        Укажите чат для отправки выше
+                    </div>
+                </div>
+
+                <details style="margin-top: 12px;">
+                    <summary style="cursor: pointer; font-size: 0.9rem; color: var(--text-secondary);">
+                        Прокси для Telegram (если MTProto заблокирован)
+                    </summary>
+                    <div style="margin-top: 8px; padding: 8px; background: var(--bg-primary); border-radius: var(--radius);">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <input type="checkbox" id="telegram_proxy_enabled" data-section="telegram.proxy" data-key="enabled"
+                                   onchange="document.getElementById('telegram-proxy-fields').style.display = this.checked ? 'block' : 'none'">
+                            <span style="font-size: 0.9rem;">Включить прокси</span>
+                        </label>
+                        <div id="telegram-proxy-fields" style="display: none; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <label>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Тип</span>
+                                <select id="telegram_proxy_scheme" data-section="telegram.proxy" data-key="scheme">
+                                    <option value="socks5">SOCKS5</option>
+                                    <option value="socks4">SOCKS4</option>
+                                    <option value="http">HTTP</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Порт</span>
+                                <input type="number" id="telegram_proxy_port" data-section="telegram.proxy" data-key="port"
+                                       min="1" max="65535" value="9050">
+                            </label>
+                            <label style="grid-column: span 2;">
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Хост</span>
+                                <input type="text" id="telegram_proxy_host" data-section="telegram.proxy" data-key="host"
+                                       placeholder="127.0.0.1">
+                            </label>
+                            <label>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Логин (если есть)</span>
+                                <input type="text" id="telegram_proxy_username" data-section="telegram.proxy" data-key="username">
+                            </label>
+                            <label>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Пароль</span>
+                                <input type="password" id="telegram_proxy_password" data-section="telegram.proxy" data-key="password">
+                            </label>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <div id="tg-auth-modal" style="display: none; margin-top: 8px;
+                 padding: 12px; background: var(--bg-primary); border-radius: var(--radius);
+                 border: 1px solid var(--border);">
+                <p style="margin-bottom: 8px; font-size: 0.9rem;">Номер телефона (международный формат):</p>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="telegram-phone" placeholder="+1234567890" style="flex: 1;">
+                    <button type="button" class="btn btn-primary" onclick="sendPhone()">Отправить код</button>
+                </div>
+                <div id="telegram-code-block" style="display: none; margin-top: 8px;">
+                    <p style="margin-bottom: 8px; font-size: 0.9rem;">Код из Telegram:</p>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="telegram-code" placeholder="12345" style="flex: 1;">
+                        <button type="button" class="btn btn-primary" onclick="sendCode()">Подтвердить</button>
+                    </div>
+                </div>
+                <div id="telegram-password-block" style="display: none; margin-top: 8px;">
+                    <p style="margin-bottom: 8px; font-size: 0.9rem;">Пароль 2FA:</p>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" id="telegram-password" placeholder="Пароль" style="flex: 1;">
+                        <button type="button" class="btn btn-primary" onclick="sendPassword()">OK</button>
+                    </div>
+                </div>
+                <div id="telegram-auth-status" style="margin-top: 8px; font-size: 0.9rem;"></div>
+            </div>
+        </div>
+
+        <div id="tg-no-config" style="display: none; color: var(--text-secondary); font-size: 0.9rem;">
+            Введите API ID и API Hash выше, затем нажмите "Подключить"
+        </div>
+    </div>
+
+    <div style="margin-top: 16px;">
+        <button type="submit" class="btn btn-primary">Сохранить настройки</button>
+        <span id="save-status" style="margin-left: 12px; font-size: 0.9rem;"></span>
+    </div>
+</form>
+
+<script>
+
+function getNested(obj, path) {
+    return path.split('.').reduce((acc, part) => acc && acc[part] !== undefined ? acc[part] : undefined, obj);
+}
+
+function setNested(obj, path, value) {
+    const parts = path.split('.');
+    let cur = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]]) cur[parts[i]] = {};
+        cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+}
+
+
+async function loadSettings() {
+    try {
+        const resp = await fetch("/api/settings");
+        const cfg = await resp.json();
+        document.querySelectorAll("[data-section][data-key]").forEach(el => {
+            const s = el.dataset.section, k = el.dataset.key;
+            const val = getNested(cfg, s + "." + k);
+            if (val !== undefined) {
+                if (el.type === "checkbox") {
+                    el.checked = Boolean(val);
+                } else {
+                    el.value = val;
+                }
+            }
+        });
+        const proxyCheck = document.getElementById("telegram_proxy_enabled");
+        if (proxyCheck && proxyCheck.checked) {
+            document.getElementById("telegram-proxy-fields").style.display = "grid";
+        }
+    } catch (_) {}
+}
+
+
+document.getElementById("settings-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = document.getElementById("save-status");
+    status.textContent = "Сохранение...";
+    const config = {};
+    document.querySelectorAll("[data-section][data-key]:not([data-nosave])").forEach(el => {
+        const s = el.dataset.section, k = el.dataset.key;
+        const val = el.type === "checkbox" ? el.checked : el.value;
+        setNested(config, s + "." + k, val);
+    });
+    try {
+        const r = await fetch("/api/settings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(config) });
+        const d = await r.json();
+        status.textContent = d.ok ? "Сохранено" : "Ошибка";
+        setTimeout(() => status.textContent = "", 2000);
+    } catch(_) { status.textContent = "Ошибка"; }
+});
+
+
+let _phone = "";
+const TG_API_ID = () => document.getElementById("telegram_api_id").value.trim();
+const TG_API_HASH = () => document.getElementById("telegram_api_hash").value.trim();
+
+function hasTgConfig() {
+    return TG_API_ID() && TG_API_HASH() && TG_API_ID() !== "0";
+}
+
+async function checkTelegramStatus() {
+    const controls = document.getElementById("tg-controls");
+    const noConfig = document.getElementById("tg-no-config");
+
+    if (!hasTgConfig()) {
+        controls.style.display = "none";
+        noConfig.style.display = "block";
+        return;
+    }
+    noConfig.style.display = "none";
+    controls.style.display = "block";
+
+    try {
+        await fetch("/api/telegram/config", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({api_id: TG_API_ID(), api_hash: TG_API_HASH()})
+        });
+
+        const r = await fetch("/api/telegram/status");
+        const s = await r.json();
+        const el = document.getElementById("telegram-connection-status");
+        const tgDialog = document.getElementById("telegram_target_dialog");
+        if (s.target_dialog) {
+            tgDialog.value = s.target_dialog;
+        }
+        if (s.connected) {
+            el.textContent = `Подключён${s.target_dialog ? ` (чат: ${s.target_dialog})` : ""}`;
+        } else {
+            el.textContent = "Не подключён — нажмите «Подключить» и введите номер телефона";
+        }
+    } catch(_) {}
+}
+
+async function connectTelegram() {
+    await fetch("/api/telegram/config", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({api_id: TG_API_ID(), api_hash: TG_API_HASH()})
+    });
+    document.getElementById("tg-auth-modal").style.display = "block";
+    document.getElementById("telegram-code-block").style.display = "none";
+    document.getElementById("telegram-password-block").style.display = "none";
+}
+
+async function sendPhone() {
+    const phone = document.getElementById("telegram-phone").value.trim();
+    if (!phone) { alert("Введите номер"); return; }
+    _phone = phone;
+    const st = document.getElementById("telegram-auth-status");
+    st.textContent = "Отправка...";
+    try {
+        const r = await fetch("/api/telegram/connect", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({phone_number:phone}) });
+        const d = await r.json();
+        if (d.ok) { st.textContent = "Подключено!"; checkTelegramStatus(); document.getElementById("tg-auth-modal").style.display = "none"; }
+        else if (d.need_code) { document.getElementById("telegram-code-block").style.display = "block"; st.textContent = "📱 Введите код"; }
+        else if (d.need_password) { document.getElementById("telegram-password-block").style.display = "block"; st.textContent = "Пароль 2FA"; }
+        else { st.textContent = `${d.error || "Ошибка"}`; }
+    } catch(_) { st.textContent = "Ошибка"; }
+}
+
+async function sendCode() {
+    const code = document.getElementById("telegram-code").value.trim();
+    if (!code) { alert("Введите код"); return; }
+    const st = document.getElementById("telegram-auth-status");
+    st.textContent = "Проверка...";
+    try {
+        const r = await fetch("/api/telegram/auth_code", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code}) });
+        const d = await r.json();
+        if (d.ok) {
+            st.textContent = "Подключено!";
+            document.getElementById("telegram-code-block").style.display = "none";
+            document.getElementById("tg-auth-modal").style.display = "none";
+            checkTelegramStatus();
+        } else if (d.need_password) {
+            document.getElementById("telegram-password-block").style.display = "block";
+            st.textContent = "Требуется пароль 2FA";
+        } else {
+            st.textContent = `${d.error || "Ошибка"}`;
+        }
+    } catch(_) { st.textContent = "Ошибка"; }
+}
+
+async function sendPassword() {
+    const pw = document.getElementById("telegram-password").value;
+    if (!pw) { alert("Введите пароль"); return; }
+    const st = document.getElementById("telegram-auth-status");
+    st.textContent = "⏳ Проверка...";
+    try {
+        const r = await fetch("/api/telegram/auth_password", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password:pw}) });
+        const d = await r.json();
+        if (d.ok) {
+            st.textContent = "Подключено!";
+            document.getElementById("telegram-password-block").style.display = "none";
+            document.getElementById("tg-auth-modal").style.display = "none";
+            checkTelegramStatus();
+        } else {
+            st.textContent = `${d.error || "Ошибка"}`;
+        }
+    } catch(_) { st.textContent = "Ошибка"; }
+}
+
+async function disconnectTelegram() {
+    try { await fetch("/api/telegram/disconnect", { method:"POST" }); checkTelegramStatus(); } catch(_) {}
+}
+
+async function logoutTelegram() {
+    if (!confirm("Выйти из аккаунта Telegram? Сессия будет удалена, потребуется повторная авторизация.")) return;
+    try {
+        await fetch("/api/telegram/logout", { method:"POST" });
+        document.getElementById("telegram_target_dialog").value = "";
+        checkTelegramStatus();
+    } catch(_) {}
+}
+
+async function saveDialog() {
+    const val = document.getElementById("telegram_target_dialog").value.trim();
+    try {
+        await fetch("/api/telegram/set_dialog", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({dialog:val}) });
+    } catch(_) {}
+}
+
+async function loadDialogs() {
+    const container = document.getElementById("dialog-list");
+    const select = document.getElementById("dialog-select");
+    select.innerHTML = '<option value="">Загрузка...</option>';
+    container.style.display = "block";
+    try {
+        const r = await fetch("/api/telegram/dialogs");
+        const d = await r.json();
+        if (!d.ok || !d.dialogs) {
+            select.innerHTML = '<option value="">Ошибка загрузки</option>';
+            return;
+        }
+        select.innerHTML = '<option value="">— Выберите чат —</option>';
+        d.dialogs.forEach(dlg => {
+            const opt = document.createElement("option");
+            opt.value = dlg.identifier;
+            opt.textContent = `${dlg.title} (${dlg.type})`;
+            select.appendChild(opt);
+        });
+    } catch(_) {
+        select.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+}
+
+
+loadSettings();
+checkTelegramStatus();
+
+document.getElementById("telegram_api_id").addEventListener("input", checkTelegramStatus);
+document.getElementById("telegram_api_hash").addEventListener("input", checkTelegramStatus);
+
+function toggleAutoSend(enabled) {
+    const warn = document.getElementById("tg-auto-send-warning");
+    if (enabled && !document.getElementById("telegram_target_dialog").value.trim()) {
+        warn.style.display = "block";
+    } else {
+        warn.style.display = "none";
+    }
+}
+</script>
+{% endblock %}

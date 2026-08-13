@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Парсинг</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 12px;">
+        Введите ссылку на страницу
+    </p>
+
+    <form id="parse-form" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="url" id="url" name="url"
+               placeholder="https://jut.su/..."
+               required>
+        <button type="submit" class="btn btn-primary">Парсить</button>
+    </form>
+
+    <div id="parse-result" style="margin-top: 16px;"></div>
+</div>
+
+<script>
+document.getElementById("parse-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = document.getElementById("url").value;
+    const result = document.getElementById("parse-result");
+
+    result.innerHTML = '<span style="color: var(--text-secondary);">Парсинг...</span>';
+
+    try {
+        const resp = await fetch("/api/parse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+        });
+        const data = await resp.json();
+
+        if (data.ok && data.slug) {
+            window.location.href = `/anime/${data.slug}`;
+        } else {
+            result.innerHTML = `<span style="color: var(--error);"> ${data.error || "Ошибка парсинга"}</span>`;
+        }
+    } catch (err) {
+        result.innerHTML = '<span style="color: var(--error);"> Ошибка соединения</span>';
+    }
+});
+</script>
+{% endblock %}
